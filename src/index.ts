@@ -16,7 +16,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log("DATABASE_URL:", process.env.DATABASE_URL ? "SET" : "NOT SET");
+console.log("ALL ENV KEYS:", Object.keys(process.env).filter(k => k.includes("DATABASE") || k.includes("POSTGRES") || k.includes("PG")).join(", "));
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS contributions (
