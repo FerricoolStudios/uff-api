@@ -17,6 +17,7 @@ cloudinary.config({
 });
 
 console.log("ALL ENV KEYS:", Object.keys(process.env).filter(k => k.includes("DATABASE") || k.includes("POSTGRES") || k.includes("PG")).join(", "));
+
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS contributions (
@@ -60,7 +61,8 @@ app.get("/api/contributions/recent", async (req, res) => {
 
 app.post("/api/contributions", upload.single("image"), async (req, res): Promise<void> => {
   try {
-    const { artistName } = req.body;
+    const { artistName, email } = req.body;
+
     if (!artistName) { res.status(400).json({ error: "artistName is required" }); return; }
 
     let imagePath = "";
@@ -85,7 +87,26 @@ app.post("/api/contributions", upload.single("image"), async (req, res): Promise
       `INSERT INTO contributions (artist_name, image_path, grid_x, grid_y) VALUES ($1, $2, $3, $4) RETURNING id, artist_name as "artistName", image_path as "imagePath", grid_x as "gridX", grid_y as "gridY", created_at as "createdAt"`,
       [artistName, imagePath, gridX, gridY]
     );
-    res.status(201).json(insertResult.rows[0]);
+
+    const row = insertResult.rows[0];
+
+    // Log to Google Sheets via Apps Script
+    const appsScriptUrl = process.env.APPS_SCRIPT_URL;
+    if (appsScriptUrl) {
+      fetch(appsScriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+          type: "mosaic",
+          artistName: artistName,
+          email: email || "",
+          tile: `(${row.gridX}, ${row.gridY})`,
+          imagePath: imagePath
+        })
+      }).catch((err) => console.error("Apps Script logging failed:", err));
+    }
+
+    res.status(201).json(row);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
